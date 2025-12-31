@@ -185,6 +185,7 @@ class HYMotionGenerate:
 
     def generate(self, pipeline: HYMotionPipeline, text: str, duration: float,
                  seed: int, cfg_scale: float = 5.0, num_samples: int = 1):
+        import comfy.utils
 
         pipe = pipeline.pipeline
 
@@ -192,12 +193,19 @@ class HYMotionGenerate:
 
         print(f"[HY-Motion] Starting generation: text='{text[:50]}...', duration={duration}s, seeds={seeds}")
 
+        # Create progress bar
+        pbar = comfy.utils.ProgressBar(pipe.validation_steps)
+
+        def progress_callback(current, total):
+            pbar.update_absolute(current, total)
+
         with torch.no_grad():
             output_dict = pipe.generate(
                 text=text,
                 seed_input=seeds,
                 duration_slider=duration,
                 cfg_scale=cfg_scale,
+                progress_callback=progress_callback,
             )
 
         import sys

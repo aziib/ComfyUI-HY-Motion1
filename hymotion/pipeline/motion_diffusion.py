@@ -497,6 +497,7 @@ class MotionFlowMatching(MotionGeneration):
         use_special_game_feat: bool = False,
         hidden_state_dict=None,
         length=None,
+        progress_callback=None,
     ) -> Dict[str, Any]:
         device = get_module_device(self)
         if length is None:
@@ -562,6 +563,10 @@ class MotionFlowMatching(MotionGeneration):
             ctxt_mask_temporal = torch.cat([ctxt_mask_temporal] * 2, dim=0)
             x_mask_temporal = torch.cat([x_mask_temporal] * 2, dim=0)
 
+        # Progress tracking
+        step_counter = [0]
+        total_steps = self.validation_steps
+
         def fn(t: Tensor, x: Tensor) -> Tensor:
             # predict flow
             x_input = torch.cat([x] * 2, dim=0) if do_classifier_free_guidance else x
@@ -576,6 +581,12 @@ class MotionFlowMatching(MotionGeneration):
             if do_classifier_free_guidance:
                 x_pred_basic, x_pred_text = x_pred.chunk(2, dim=0)
                 x_pred = x_pred_basic + text_guidance_scale * (x_pred_text - x_pred_basic)
+
+            # Update progress
+            step_counter[0] += 1
+            if progress_callback is not None:
+                progress_callback(step_counter[0], total_steps)
+
             return x_pred
 
         # duplicate test corner for inner time step oberservation
