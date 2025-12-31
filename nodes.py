@@ -14,8 +14,10 @@ if CURRENT_DIR not in sys.path:
 try:
     import folder_paths
     COMFY_MODELS_DIR = folder_paths.models_dir
+    COMFY_OUTPUT_DIR = folder_paths.get_output_directory()
 except ImportError:
     COMFY_MODELS_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "models")
+    COMFY_OUTPUT_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "output")
 
 HYMOTION_MODELS_DIR = os.path.join(COMFY_MODELS_DIR, "HY-Motion")
 
@@ -406,9 +408,9 @@ class HYMotionExportFBX:
         if pipeline.fbx_converter is None:
             return ("FBX SDK not installed, export unavailable",)
 
-        if not output_dir.startswith("output"):
-            output_dir = os.path.join("output", output_dir)
-        os.makedirs(output_dir, exist_ok=True)
+        # Use ComfyUI's native output directory
+        full_output_dir = os.path.join(COMFY_OUTPUT_DIR, output_dir)
+        os.makedirs(full_output_dir, exist_ok=True)
 
         output_dict = motion_data.output_dict
         timestamp = get_timestamp()
@@ -436,7 +438,7 @@ class HYMotionExportFBX:
                 continue
 
             fbx_filename = f"{filename_prefix}_{timestamp}_{unique_id}_{batch_idx:03d}.fbx"
-            fbx_path = os.path.join(output_dir, fbx_filename)
+            fbx_path = os.path.join(full_output_dir, fbx_filename)
 
             try:
                 print(f"[HY-Motion] Converting to FBX: {fbx_path}", flush=True)
@@ -464,7 +466,8 @@ class HYMotionExportFBX:
                 print(f"[HY-Motion] FBX export failed: {e}")
                 traceback.print_exc()
 
-        relative_paths = [p.replace("output/", "").replace("output\\", "") for p in fbx_files]
+        # Return paths relative to ComfyUI output directory
+        relative_paths = [os.path.relpath(p, COMFY_OUTPUT_DIR) for p in fbx_files]
         result = "\n".join(relative_paths) if relative_paths else "Export failed"
         return (result,)
 
@@ -493,9 +496,9 @@ class HYMotionSaveNPZ:
     def save_npz(self, motion_data: HYMotionData, output_dir: str, filename_prefix: str):
         import numpy as np
 
-        if not output_dir.startswith("output"):
-            output_dir = os.path.join("output", output_dir)
-        os.makedirs(output_dir, exist_ok=True)
+        # Use ComfyUI's native output directory
+        full_output_dir = os.path.join(COMFY_OUTPUT_DIR, output_dir)
+        os.makedirs(full_output_dir, exist_ok=True)
 
         output_dict = motion_data.output_dict
         timestamp = get_timestamp()
@@ -518,13 +521,14 @@ class HYMotionSaveNPZ:
             data["seed"] = motion_data.seeds[batch_idx] if batch_idx < len(motion_data.seeds) else 0
 
             npz_filename = f"{filename_prefix}_{timestamp}_{unique_id}_{batch_idx:03d}.npz"
-            npz_path = os.path.join(output_dir, npz_filename)
+            npz_path = os.path.join(full_output_dir, npz_filename)
 
             np.savez(npz_path, **data)
             npz_files.append(npz_path)
             print(f"[HY-Motion] NPZ saved: {npz_path}")
 
-        relative_paths = [p.replace("output/", "").replace("output\\", "") for p in npz_files]
+        # Return paths relative to ComfyUI output directory
+        relative_paths = [os.path.relpath(p, COMFY_OUTPUT_DIR) for p in npz_files]
         result = "\n".join(relative_paths)
         return (result,)
 
