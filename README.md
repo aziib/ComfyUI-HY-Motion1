@@ -5,6 +5,7 @@ A ComfyUI plugin based on [HY-Motion 1.0](https://github.com/Tencent-Hunyuan/HY-
 ## Features
 
 - **Text-to-Motion Generation**: Generate 3D human motion from text descriptions
+- **Prompt Rewrite**: Automatically optimize text prompts and estimate motion duration using LLM
 - **Multi-sample Generation**: Generate multiple motion samples simultaneously
 - **Motion Preview**: Real-time skeleton preview rendering
 - **3D Animation Preview**: Interactive Three.js viewer with playback controls
@@ -12,6 +13,7 @@ A ComfyUI plugin based on [HY-Motion 1.0](https://github.com/Tencent-Hunyuan/HY-
 - **FBX Export**: Export to standard FBX format for Maya/Blender and other DCC tools
 - **NPZ Save**: Save in universal NPZ format
 - **GGUF Support**: Load quantized Qwen3-8B GGUF models for lower VRAM usage
+- **CPU Offload**: Option to run LLM models on CPU to save GPU VRAM
 
 ## Installation
 
@@ -62,6 +64,7 @@ Load Qwen3-8B LLM from HuggingFace (supports BitsAndBytes quantization).
 | Parameter | Description |
 |-----------|-------------|
 | quantization | Quantization mode: `none` / `int8` / `int4` |
+| offload_to_cpu | Load model on CPU instead of GPU (slower but saves VRAM) |
 
 ### HY-Motion Load LLM (GGUF)
 Load Qwen3-8B LLM from GGUF file.
@@ -69,6 +72,30 @@ Load Qwen3-8B LLM from GGUF file.
 | Parameter | Description |
 |-----------|-------------|
 | gguf_file | Select GGUF file from the list |
+| offload_to_cpu | Load model on CPU instead of GPU (slower but saves VRAM) |
+
+### HY-Motion Load Prompter
+Load Text2MotionPrompter LLM for prompt rewriting and duration estimation.
+
+| Parameter | Description |
+|-----------|-------------|
+| model_source | Model source: `(auto download)` or local path |
+| offload_to_cpu | Load model on CPU instead of GPU (slower but saves VRAM) |
+
+**Note**: The model will be automatically downloaded from HuggingFace on first use (~2-3GB).
+
+### HY-Motion Rewrite Prompt
+Rewrite text prompt and estimate motion duration using LLM.
+
+| Parameter | Description |
+|-----------|-------------|
+| prompter | Prompter model from Load Prompter node |
+| text | Original text description (supports Chinese and English) |
+
+| Output | Description |
+|--------|-------------|
+| rewritten_text | Optimized English description |
+| duration | Estimated motion duration in seconds |
 
 **Note**: You need to download GGUF files manually from https://huggingface.co/Qwen/Qwen3-8B-GGUF
 
@@ -133,6 +160,7 @@ Save in NPZ format.
 
 ## Example Workflow
 
+### Basic Workflow
 ```
 [HY-Motion Load LLM] ──┐
                        ├──> [HY-Motion Encode Text] ──┐
@@ -142,7 +170,26 @@ Save in NPZ format.
                                                                                   └──> [HY-Motion Export FBX]
 ```
 
-For GGUF:
+### With Prompt Rewrite (Recommended)
+```
+[HY-Motion Load Prompter] ──> [HY-Motion Rewrite Prompt] ──┬──> rewritten_text ──> [HY-Motion Encode Text]
+                                      │                    │
+                                      │                    └──> duration ──> [HY-Motion Generate]
+                                      │
+                                      └── text (user input)
+
+[HY-Motion Load LLM] ──────────────────────────────────────────> [HY-Motion Encode Text] ──┐
+                                                                                           │
+[HY-Motion Load Network] ─────────────────────────────────────────────────────────────────┴──> [HY-Motion Generate]
+```
+
+The Prompt Rewrite workflow:
+1. Takes your text input (supports Chinese/English)
+2. Optimizes it to a standardized English description
+3. Estimates appropriate motion duration
+4. Feeds both to the generation pipeline
+
+### For GGUF
 ```
 [HY-Motion Load LLM (GGUF)] ──> [HY-Motion Encode Text] ──> ...
 ```
@@ -157,20 +204,29 @@ For GGUF:
      - HuggingFace `quantization=int8`: ~8GB VRAM
      - HuggingFace `quantization=int4`: ~4GB VRAM
      - GGUF Q4_K_M: ~5GB VRAM
+   - Text2MotionPrompter (optional): ~2-3GB VRAM (4bit quantized)
 
-2. **GGUF Requirements**:
+2. **CPU Offload**:
+   - All LLM loader nodes support `offload_to_cpu` option
+   - When enabled, the model runs entirely on CPU (no GPU VRAM required)
+   - Trade-off: Slower inference speed but allows running multiple LLMs simultaneously
+   - Recommended: Enable CPU offload for Prompter if VRAM is limited, keep Text Encoder on GPU for faster encoding
+
+3. **GGUF Requirements**:
    - Requires `transformers>=4.40`
    - GGUF files must be downloaded manually
    - Place in `ComfyUI/models/HY-Motion/ckpts/GGUF/`
 
-3. **FBX Export**: Requires additional fbxsdkpy installation:
+4. **FBX Export**: Requires additional fbxsdkpy installation:
    ```bash
    pip install fbxsdkpy --extra-index-url https://gitlab.inria.fr/api/v4/projects/18692/packages/pypi/simple
    ```
 
    **Having trouble installing fbxsdkpy?** Use the **HY-Motion Preview Animation (3D)** node instead! It provides a pure frontend GLB export with skeleton animation that works without any additional Python dependencies.
 
-4. **Text Encoder**: CLIP model will be downloaded automatically on first use. Qwen3-8B will be downloaded automatically when using Load LLM node (not GGUF).
+5. **Text Encoder**: CLIP model will be downloaded automatically on first use. Qwen3-8B will be downloaded automatically when using Load LLM node (not GGUF).
+
+6. **Prompt Rewrite**: Text2MotionPrompter model will be downloaded automatically on first use (~2-3GB). Supports Chinese and English input.
 
 ## License
 
