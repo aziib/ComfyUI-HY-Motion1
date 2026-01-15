@@ -257,6 +257,8 @@ class HYMotionLoadLLMGGUF:
                     # Use auto device map with max_memory constraints to force CPU offloading
                     # This will automatically split layers between GPU and CPU
                     load_kwargs["device_map"] = "auto"
+                    # Use float16 for GPU to save VRAM
+                    load_kwargs["torch_dtype"] = torch.float16
                     # Set max_memory to limit GPU usage - using ~50% will force half to CPU
                     if torch.cuda.is_available():
                         gpu_memory = torch.cuda.get_device_properties(device_index).total_memory
@@ -281,6 +283,8 @@ class HYMotionLoadLLMGGUF:
                     # Map all layers to the GPU device
                     device_index = device.index if device.index is not None else 0
                     load_kwargs["device_map"] = {"": device_index}
+                    # Use float16 for GPU to save VRAM
+                    load_kwargs["torch_dtype"] = torch.float16
                 else:
                     # Fallback to CPU if no GPU available
                     load_kwargs["device_map"] = "cpu"
@@ -563,10 +567,18 @@ class HYMotionEncodeText:
             input_ids=llm_enc["input_ids"].to(llm_device),
             attention_mask=llm_enc["attention_mask"].to(llm_device),
             output_hidden_states=True,
+            use_cache=False,
         )
 
         ctxt_raw = llm_out.hidden_states[-1][:, llm.crop_start:llm.crop_start + llm.max_length].contiguous().to(device)
         ctxt_length = (llm_enc["attention_mask"].sum(dim=-1) - llm.crop_start).clamp(0, llm.max_length).to(device)
+
+        # Clear memory
+        del llm_out, llm_enc
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         print(f"[HY-Motion] Encoded: vtxt={vtxt_raw.shape}, ctxt={ctxt_raw.shape}")
         return (HYMotionConditioning(vtxt_raw, ctxt_raw, ctxt_length, text_list),)
